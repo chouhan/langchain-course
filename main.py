@@ -1,10 +1,22 @@
+from typing import List
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage
+from langchain.tools import tool
+# from tavily import TavilyClient
+from langchain_tavily import TavilySearch
 
-load_dotenv()
 
+
+# override=True ensures that the .env file values take precedence over existing shell variables
+load_dotenv(override=True)
+
+# Tavily
+# tavily = TavilyClient()
 
 def main():
     print("Hello from langchain-course!")
@@ -30,12 +42,54 @@ Musk's political activities, views, and statements have made him a polarizing fi
         input_variables=["information"], template=summary_template
     )
 
-    # llm = ChatOllama(temperature=0, model="gemma3:270m")
-    llm = ChatOpenAI(temperature=0, model="gpt-5")
-    chain = summary_prompt_template | llm
+    ##### ----- Pass the prompting template to our defined LLM instances (Ollama , OpenAI), invoke them and print the response
+    # chain = summary_prompt_template | getOllamaInstance()
+    # response = chain.invoke(input={"information": information})
+    # print(response.content)
 
-    response = chain.invoke(input={"information": information})
-    print(response.content)
+    ##### ----- Let the Agent call the search tool
+    # tools = [search]
+    # agent = getAgentWithTool(getOpenAIInstance(), tools)
+    agent = getAgentWithTool(getOpenAIInstance(), [TavilySearch()])
+    result = agent.invoke({"messages": HumanMessage(content="What is the weather in Hyderabad, India?")})
+    print(result)
+ 
+class Source(BaseModel):
+    """Schema for a source used by the agent"""
+
+    url:str = Field(description="The URL of the source")
+
+class AgentResponse(BaseModel):
+    """Schema for the agent response with answer and sources"""
+
+    answer:str = Field(description="The answer to the question")
+    sources:List[Source] = Field(default_factory=list, description="List of sources used to answer the question")
+
+
+
+# @tool
+# def search(query:str) -> str:
+#     """
+#     Tool that seaches over internet
+#     Args:
+#         query: The query to search for
+#     Returns:
+#         The search result
+#     """
+#     print(f"Searching for {query}")
+#     return tavily.search(query=query)
+        
+
+def getOllamaInstance():
+    return ChatOllama(temperature=0, model="gemma3:270m")
+
+def getOpenAIInstance():
+    return ChatOpenAI(temperature=0, model="gpt-5")
+
+def getAgentWithTool(_model, _tool):
+    return create_agent(model=_model, tools=_tool, response_format=AgentResponse)
+
 
 if __name__ == "__main__":
     main()
+    
